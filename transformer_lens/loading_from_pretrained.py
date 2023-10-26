@@ -758,10 +758,9 @@ def convert_hf_model_config(model_name: str, **kwargs):
             "n_ctx": hf_config.n_positions,
             "eps": hf_config.layer_norm_epsilon,
             "d_vocab": hf_config.vocab_size,
-            "act_fn": hf_config.activation_function,
+            "act_fn": "silu",
             "use_attn_scale": True,
             "use_local_attn": False,
-            "scale_attn_by_inverse_layer_idx": hf_config.scale_attn_by_inverse_layer_idx,
             "normalization_type": "LN",
         }
     else:
