@@ -137,6 +137,7 @@ OFFICIAL_MODEL_NAMES = [
     "stabilityai/stablelm-tuned-alpha-3b",
     "stabilityai/stablelm-tuned-alpha-7b",
     "bigcode/santacoder",
+    "smallcloudai/Refact-1_6B-fim",
 ]
 """Official model names for models on HuggingFace."""
 
@@ -496,8 +497,14 @@ MODEL_ALIASES = {
         "stablelm-tuned-7b",
     ],
     "bigcode/santacoder": ["santacoder"],
+    "smallcloudai/Refact-1_6B-fim": ["refact-1_6B-fim"],
 }
 """Model aliases for models on HuggingFace."""
+
+REMOTE_MODELS = [
+    "bigcode/santacoder",
+    "smallcloudai/Refact-1_6B-fim",
+]
 
 # Sets a default model alias, by convention the first one in the model alias table, else the official name if it has no aliases
 DEFAULT_MODEL_ALIASES = [
@@ -725,6 +732,23 @@ def convert_hf_model_config(model_name: str, **kwargs):
         }
     elif architecture == "GPT2LMHeadCustomModel":
         # santacoder
+        cfg_dict = {
+            "d_model": hf_config.n_embd,
+            "d_head": hf_config.n_embd // hf_config.n_head,
+            "n_heads": hf_config.n_head,
+            "d_mlp": hf_config.n_embd * 4,
+            "n_layers": hf_config.n_layer,
+            "n_ctx": hf_config.n_positions,
+            "eps": hf_config.layer_norm_epsilon,
+            "d_vocab": hf_config.vocab_size,
+            "act_fn": hf_config.activation_function,
+            "use_attn_scale": True,
+            "use_local_attn": False,
+            "scale_attn_by_inverse_layer_idx": hf_config.scale_attn_by_inverse_layer_idx,
+            "normalization_type": "LN",
+        }
+    elif architecture == "GPTRefactForCausalLM":
+        # refact
         cfg_dict = {
             "d_model": hf_config.n_embd,
             "d_head": hf_config.n_embd // hf_config.n_head,
@@ -983,13 +1007,12 @@ def get_pretrained_state_dict(
         dtype = kwargs["torch_dtype"]
         del kwargs["torch_dtype"]
     official_model_name = get_official_model_name(official_model_name)
-    if official_model_name == "bigcode/santacoder" and not kwargs.get(
+    if official_model_name in REMOTE_MODELS and not kwargs.get(
         "trust_remote_code", False
     ):
         logging.warning(
-            "Loading santacoder model requires setting trust_remote_code=True"
+            f"Loading {official_model_name} without setting trust_remote_code=True"
         )
-        kwargs["trust_remote_code"] = True
     if (
         official_model_name.startswith("NeelNanda")
         or official_model_name.startswith("ArthurConmy")
@@ -1070,6 +1093,8 @@ def get_pretrained_state_dict(
         elif cfg.original_architecture == "BertForMaskedLM":
             state_dict = convert_bert_weights(hf_model, cfg)
         elif cfg.original_architecture == "GPT2LMHeadCustomModel":
+            state_dict = convert_coder_weights(hf_model, cfg)
+        elif cfg.original_architecture == "GPTRefactForCausalLM":
             state_dict = convert_coder_weights(hf_model, cfg)
         else:
             raise ValueError(
