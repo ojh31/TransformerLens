@@ -1686,8 +1686,6 @@ def convert_coder_weights(model, cfg: HookedTransformerConfig):
         state_dict[f"blocks.{l}.ln1.w"] = model.transformer.h[l].ln_1.weight
         state_dict[f"blocks.{l}.ln1.b"] = model.transformer.h[l].ln_1.bias
 
-        # In GPT-2, q,k,v are produced by one big linear map, whose output is
-        # concat([q, k, v])
         W_KV = model.transformer.h[l].attn.kv_attn.weight  # [d_model, 2 * d_head]
         W_K, W_V = torch.tensor_split(W_KV, 2, dim=1)
         W_Q = model.transformer.h[l].attn.q_attn.weight  # [d_model, d_model]
@@ -1781,8 +1779,8 @@ def convert_refact_weights(model, cfg: HookedTransformerConfig):
         state_dict[f"blocks.{l}.mlp.b_out"] = torch.zeros_like(W_out[:, 0])
     state_dict["unembed.W_U"] = model.lm_head.weight.T
 
-    state_dict["ln_final.w"] = model.transformer.ln_f.weight
-    state_dict["ln_final.b"] = model.transformer.ln_f.bias
+    state_dict["ln_final.w"] = torch.ones_like(model.transformer.h[0].ln_1.weight)
+    state_dict["ln_final.b"] = torch.zeros_like(model.transformer.h[0].ln_1.weight)
     return state_dict
 
 
