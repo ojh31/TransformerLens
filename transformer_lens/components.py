@@ -859,7 +859,7 @@ class Attention(nn.Module):
 
 
 def half_silu(
-    up_proj: Float[torch.Tensor, "... hidden_dim * 2"]
+    up_proj: Float[torch.Tensor, "... 2*hidden_dim"]
 ) -> Float[torch.Tensor, "... hidden_dim"]:
     """
     Half-SiLU activation function, as defined in
