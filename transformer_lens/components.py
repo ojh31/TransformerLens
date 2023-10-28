@@ -859,15 +859,15 @@ class Attention(nn.Module):
 
 
 def half_silu(
-    up_proj: Float[torch.Tensor, "hidden_dim * 2"]
-) -> Float[torch.Tensor, "hidden_dim"]:
+    up_proj: Float[torch.Tensor, "... hidden_dim * 2"]
+) -> Float[torch.Tensor, "... hidden_dim"]:
     """
     Half-SiLU activation function, as defined in
      ~/.cache/huggingface/modules/transformers_modules/smallcloudai/Refact-1_6B-fim/
      acc9591f69aae4d950d58d372aa6c8b34543fd2c/modeling_gpt_refact.py
-
     """
-    x1, x2 = torch.split(up_proj, len(up_proj) // 2, dim=-1)
+    hidden_dim = up_proj.size(-1) // 2
+    x1, x2 = torch.split(up_proj, hidden_dim, dim=-1)
     return F.silu(x1) * x2
 
 
