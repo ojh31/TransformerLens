@@ -873,9 +873,14 @@ class MLP(nn.Module):
             torch.empty(self.cfg.d_model, self.cfg.d_mlp, dtype=cfg.dtype)
         )
         self.b_in = nn.Parameter(torch.zeros(self.cfg.d_mlp, dtype=cfg.dtype))
-        self.W_out = nn.Parameter(
-            torch.empty(self.cfg.d_mlp, self.cfg.d_model, dtype=cfg.dtype)
-        )
+        if cfg.act_fn == "half_silu":
+            self.W_out = nn.Parameter(
+                torch.empty(self.cfg.d_mlp // 2, self.cfg.d_model, dtype=cfg.dtype)
+            )
+        else:
+            self.W_out = nn.Parameter(
+                torch.empty(self.cfg.d_mlp, self.cfg.d_model, dtype=cfg.dtype)
+            )
         self.b_out = nn.Parameter(torch.zeros(self.cfg.d_model, dtype=cfg.dtype))
 
         self.hook_pre = HookPoint()  # [batch, pos, d_mlp]

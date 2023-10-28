@@ -1775,11 +1775,11 @@ def convert_refact_weights(model, cfg: HookedTransformerConfig):
 
         W_in = model.transformer.h[l].mlp.gate_up_proj.weight.T
         state_dict[f"blocks.{l}.mlp.W_in"] = W_in
-        state_dict[f"blocks.{l}.mlp.b_in"] = torch.zeros_like(W_in[:, 0])
+        state_dict[f"blocks.{l}.mlp.b_in"] = torch.zeros_like(W_in[0])
 
         W_out = model.transformer.h[l].mlp.c_proj.weight.T
         state_dict[f"blocks.{l}.mlp.W_out"] = W_out
-        state_dict[f"blocks.{l}.mlp.b_out"] = torch.zeros_like(W_out[:, 0])
+        state_dict[f"blocks.{l}.mlp.b_out"] = torch.zeros_like(W_out[0])
     state_dict["unembed.W_U"] = model.lm_head.weight.T
 
     state_dict["ln_final.w"] = torch.ones_like(model.transformer.h[0].ln_1.weight)
