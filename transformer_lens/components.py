@@ -5,6 +5,7 @@ needed to create many different types of generative language models. They are us
 :class:`transformer_lens.HookedTransformer`.
 """
 import logging
+import math
 from typing import Dict, Optional, Tuple, Union
 
 import einops
@@ -19,7 +20,13 @@ from transformer_lens.FactoredMatrix import FactoredMatrix
 from transformer_lens.hook_points import HookPoint
 from transformer_lens.HookedTransformerConfig import HookedTransformerConfig
 from transformer_lens.past_key_value_caching import HookedTransformerKeyValueCacheEntry
-from transformer_lens.utils import gelu_fast, gelu_new, get_offset_position_ids, solu
+from transformer_lens.utils import (
+    gelu_fast,
+    gelu_new,
+    get_offset_position_ids,
+    solu,
+    expand_alibi_on_query_dim,
+)
 
 
 # Embed & Unembed
@@ -860,9 +867,8 @@ def half_silu(
      acc9591f69aae4d950d58d372aa6c8b34543fd2c/modeling_gpt_refact.py
 
     """
-    x1, x2 = torch.split(up_proj, self.hidden_dim, dim=-1)
-    x = self.c_proj(F.silu(x1) * x2)
-    return x
+    x1, x2 = torch.split(up_proj, len(up_proj) // 2, dim=-1)
+    return F.silu(x1) * x2
 
 
 # MLP Layers
