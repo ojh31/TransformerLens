@@ -753,7 +753,7 @@ def convert_hf_model_config(model_name: str, **kwargs):
             "d_model": hf_config.n_embd,
             "d_head": hf_config.n_embd // hf_config.n_head,
             "n_heads": hf_config.n_head,
-            "d_mlp": hf_config.n_embd * 4,
+            "d_mlp": 11264,
             "n_layers": hf_config.n_layer,
             "n_ctx": hf_config.n_positions,
             "eps": hf_config.layer_norm_epsilon,
@@ -1737,6 +1737,9 @@ def convert_refact_weights(model, cfg: HookedTransformerConfig):
     state_dict = {}
 
     state_dict["embed.W_E"] = model.transformer.wte.weight
+    state_dict["pos_embed.W_pos"] = torch.zeros(
+        (cfg.n_ctx, cfg.d_model), dtype=cfg.dtype, device=cfg.device
+    )
 
     for l in range(cfg.n_layers):
         state_dict[f"blocks.{l}.ln1.w"] = model.transformer.h[l].ln_1.weight
@@ -1745,11 +1748,11 @@ def convert_refact_weights(model, cfg: HookedTransformerConfig):
         )
 
         W_KV = model.transformer.h[l].attn.kv.weight  # [2 * d_head, d_model]
-        W_K, W_V = torch.tensor_split(W_KV, 2, dim=0)
+        W_K, W_V = torch.tensor_split(W_KV, 2, dim=0)  # [d_head, d_model]
         W_Q = model.transformer.h[l].attn.q.weight  # [d_model, d_model]
         W_Q = einops.rearrange(W_Q, "m (i h)->i m h", i=cfg.n_heads)
-        W_K = einops.repeat(W_K, "m h -> i m h", i=cfg.n_heads)
-        W_V = einops.repeat(W_V, "m h -> i m h", i=cfg.n_heads)
+        W_K = einops.repeat(W_K, "h m -> i m h", i=cfg.n_heads)
+        W_V = einops.repeat(W_V, "h m -> i m h", i=cfg.n_heads)
 
         state_dict[f"blocks.{l}.attn.W_Q"] = W_Q
         state_dict[f"blocks.{l}.attn.W_K"] = W_K
@@ -1763,7 +1766,7 @@ def convert_refact_weights(model, cfg: HookedTransformerConfig):
         W_O = model.transformer.h[l].attn.c_proj.weight
         W_O = einops.rearrange(W_O, "(i h) m->i h m", i=cfg.n_heads)
         state_dict[f"blocks.{l}.attn.W_O"] = W_O
-        state_dict[f"blocks.{l}.attn.b_O"] = model.transformer.h[l].attn.c_proj.bias
+        state_dict[f"blocks.{l}.attn.b_O"] = torch.zeros_like(W_O[0, 0, :])
 
         state_dict[f"blocks.{l}.ln2.w"] = model.transformer.h[l].ln_2.weight
         state_dict[f"blocks.{l}.ln2.b"] = torch.zeros_like(
