@@ -849,8 +849,8 @@ def compute_attention_linear_bias(
 
 
 def half_silu(
-    up_proj: Float[Tensor, "hidden_dim + hidden_dim"]
-) -> Float[Tensor, "hidden_dim"]:
+    up_proj: Float[torch.Tensor, "hidden_dim + hidden_dim"]
+) -> Float[torch.Tensor, "hidden_dim"]:
     """
     Half-SiLU activation function, as defined in
      ~/.cache/huggingface/modules/transformers_modules/smallcloudai/Refact-1_6B-fim/
