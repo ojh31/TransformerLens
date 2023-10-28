@@ -593,6 +593,16 @@ class Attention(nn.Module):
             )
             / self.attn_scale
         )  # [batch, head_index, query_pos, key_pos]
+        if self.cfg.positional_embedding_type == "alibi":
+            # Compute attention linear bias: check compute_attention_linear_bias documentation
+            alibi = self.compute_attention_linear_bias(
+                batch_size=attn_scores.size(0),
+                query_dim=attn_scores.size(-2),
+                key_dim=attn_scores.size(-1),
+                num_heads=self.cfg.n_heads,
+                device=attn_scores.device,
+            ).to(attn_scores.device)
+            attn_scores += alibi  # [batch, head_index, query_pos, key_pos]
         if self.cfg.attention_dir == "causal":
             # If causal attention, we mask it to only attend backwards. If bidirectional, we don't mask.
             attn_scores = self.apply_causal_mask(
@@ -756,6 +766,86 @@ class Attention(nn.Module):
             x_rotated = x_rot * mask_rotary_cos + x_flip * mask_rotary_sin
 
         return torch.cat([x_rotated, x_pass], dim=-1)
+
+
+def compute_attention_linear_bias(
+    self,
+    batch_size: int,
+    query_dim: int,
+    key_dim: int,
+    num_heads: int,
+    device: torch.device,
+) -> Float[torch.Tensor, "batch head_index query_dim key_dim"]:
+    """
+    Implementation of Attention with Linear Biases (ALiBi) as proposed in the paper
+    'Train Short, Test Long: Attention with Linear Biases Enables Input Length Extrapolation'
+    (available at https://arxiv.org/abs/2108.12409). Unlike the Hugging Face implementation, which returns a tensor of shape
+    (batch_size, n_heads, 1, key_pos) and relies on implicit broadcasting, this
+    implementation returns a tensor of shape (batch_size, n_heads, query_pos, key_pos),
+    eliminating the need for broadcasting. While the Hugging Face implementation does not
+    provide a 'causal' bias as suggested in the paper, it still achieves the correct `pattern`
+    due to the translation invariance of the softmax operation. However, this implementation
+    adheres to the paper's recommendation by providing a causal bias (after applying causal mask).
+    As a result, the values in `hook_attn_scores` will be accurate.
+    Args:
+        batch_size:
+            Batch size of attention tensors
+        qeury_dim:
+            Dimension of query context
+        key_dim:
+            Dimension of key context. Notice this key_dim will also be the longest sequence length
+            if kv cache is used.
+        num_heads:
+            Number of attention heads, ALiBi output head dependent biases.
+        device:
+            The device used (same as the device attention score is on).
+    Returns:
+        Returns the linear bias to be added to attention scores.
+    """
+
+    # Set max sequence length to key context length - if not using a past_kv_cache
+    # this is just the context length (for the current prompt), but if we're caching
+    # it will be the context `length + past_kv_pos_offset``.
+    max_seq_length = key_dim
+    dtype = (
+        self.cfg.dtype
+        if self.cfg.dtype in [torch.float32, torch.float64]
+        else "torch.float32"
+    )
+    attention_mask = torch.ones(batch_size, max_seq_length).to(device)
+
+    closest_power_of_2 = 2 ** math.floor(math.log2(num_heads))
+    base = torch.tensor(
+        2 ** (-(2 ** -(math.log2(closest_power_of_2) - 3))),
+        device=attention_mask.device,
+        dtype=torch.float32,
+    )
+    powers = torch.arange(
+        1, 1 + closest_power_of_2, device=attention_mask.device, dtype=torch.int32
+    )
+    slopes = torch.pow(base, powers)
+
+    if closest_power_of_2 != num_heads:
+        extra_base = torch.tensor(
+            2 ** (-(2 ** -(math.log2(2 * closest_power_of_2) - 3))),
+            device=attention_mask.device,
+            dtype=torch.float32,
+        )
+        num_remaining_heads = min(closest_power_of_2, num_heads - closest_power_of_2)
+        extra_powers = torch.arange(
+            1,
+            1 + 2 * num_remaining_heads,
+            2,
+            device=attention_mask.device,
+            dtype=torch.int32,
+        )
+        slopes = torch.cat([slopes, torch.pow(extra_base, extra_powers)], dim=0)
+
+    arange_tensor = ((attention_mask.cumsum(dim=-1) - 1) * attention_mask)[:, None, :]
+    alibi = slopes[..., None] * arange_tensor
+    res = alibi.reshape(batch_size, num_heads, 1, max_seq_length).to(dtype)
+    # explicitly expand the query dimension and make the bias causal.
+    return expand_alibi_on_query_dim(res, res.size(-1)).to(dtype)
 
 
 # MLP Layers
