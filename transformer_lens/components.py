@@ -848,6 +848,20 @@ def compute_attention_linear_bias(
     return expand_alibi_on_query_dim(res, res.size(-1)).to(dtype)
 
 
+def half_silu(
+    up_proj: Float[Tensor, "hidden_dim + hidden_dim"]
+) -> Float[Tensor, "hidden_dim"]:
+    """
+    Half-SiLU activation function, as defined in
+     ~/.cache/huggingface/modules/transformers_modules/smallcloudai/Refact-1_6B-fim/
+     acc9591f69aae4d950d58d372aa6c8b34543fd2c/modeling_gpt_refact.py
+
+    """
+    x1, x2 = torch.split(up_proj, self.hidden_dim, dim=-1)
+    x = self.c_proj(F.silu(x1) * x2)
+    return x
+
+
 # MLP Layers
 class MLP(nn.Module):
     def __init__(self, cfg: Union[Dict, HookedTransformerConfig]):
@@ -873,6 +887,8 @@ class MLP(nn.Module):
             self.act_fn = F.gelu
         elif self.cfg.act_fn == "silu":
             self.act_fn = F.silu
+        elif self.cfg.act_fn == "half_silu":
+            self.act_fn = half_silu
         elif self.cfg.act_fn == "gelu_new":
             self.act_fn = gelu_new
         elif self.cfg.act_fn == "gelu_fast":
@@ -955,6 +971,8 @@ class GatedMLP(nn.Module):
             self.act_fn = F.gelu
         elif self.cfg.act_fn == "silu":
             self.act_fn = F.silu
+        elif self.cfg.act_fn == "half_silu":
+            self.act_fn = half_silu
         elif self.cfg.act_fn == "gelu_new":
             self.act_fn = gelu_new
         elif self.cfg.act_fn == "gelu_fast":

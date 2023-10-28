@@ -758,7 +758,7 @@ def convert_hf_model_config(model_name: str, **kwargs):
             "n_ctx": hf_config.n_positions,
             "eps": hf_config.layer_norm_epsilon,
             "d_vocab": hf_config.vocab_size,
-            "act_fn": "silu",
+            "act_fn": "half_silu",
             "use_attn_scale": True,
             "use_local_attn": False,
             "normalization_type": "LN",
@@ -1095,7 +1095,7 @@ def get_pretrained_state_dict(
         elif cfg.original_architecture == "GPT2LMHeadCustomModel":
             state_dict = convert_coder_weights(hf_model, cfg)
         elif cfg.original_architecture == "GPTRefactForCausalLM":
-            state_dict = convert_coder_weights(hf_model, cfg)
+            state_dict = convert_refact_weights(hf_model, cfg)
         else:
             raise ValueError(
                 f"Loading weights from the architecture is not currently supported: {cfg.original_architecture}, generated from model name {cfg.model_name}. Feel free to open an issue on GitHub to request this feature."
@@ -1728,6 +1728,57 @@ def convert_coder_weights(model, cfg: HookedTransformerConfig):
         W_out = model.transformer.h[l].mlp.c_proj.weight
         state_dict[f"blocks.{l}.mlp.W_out"] = W_out
         state_dict[f"blocks.{l}.mlp.b_out"] = model.transformer.h[l].mlp.c_proj.bias
+    state_dict["unembed.W_U"] = model.lm_head.weight.T
+
+    state_dict["ln_final.w"] = model.transformer.ln_f.weight
+    state_dict["ln_final.b"] = model.transformer.ln_f.bias
+    return state_dict
+
+
+def convert_refact_weights(model, cfg: HookedTransformerConfig):
+    state_dict = {}
+
+    state_dict["embed.W_E"] = model.transformer.wte.weight
+
+    for l in range(cfg.n_layers):
+        state_dict[f"blocks.{l}.ln1.w"] = model.transformer.h[l].ln_1.weight
+        state_dict[f"blocks.{l}.ln1.b"] = torch.zeros_like(
+            model.transformer.h[l].ln_1.weight
+        )
+
+        W_KV = model.transformer.h[l].attn.kv.weight  # [2 * d_head, d_model]
+        W_K, W_V = torch.tensor_split(W_KV, 2, dim=0)
+        W_Q = model.transformer.h[l].attn.q.weight  # [d_model, d_model]
+        W_Q = einops.rearrange(W_Q, "m (i h)->i m h", i=cfg.n_heads)
+        W_K = einops.repeat(W_K, "m h -> i m h", i=cfg.n_heads)
+        W_V = einops.repeat(W_V, "m h -> i m h", i=cfg.n_heads)
+
+        state_dict[f"blocks.{l}.attn.W_Q"] = W_Q
+        state_dict[f"blocks.{l}.attn.W_K"] = W_K
+        state_dict[f"blocks.{l}.attn.W_V"] = W_V
+
+        b_Q = b_K = b_V = torch.zeros_like(W_K[:, :, 0])
+        state_dict[f"blocks.{l}.attn.b_Q"] = b_Q
+        state_dict[f"blocks.{l}.attn.b_K"] = b_K
+        state_dict[f"blocks.{l}.attn.b_V"] = b_V
+
+        W_O = model.transformer.h[l].attn.c_proj.weight
+        W_O = einops.rearrange(W_O, "(i h) m->i h m", i=cfg.n_heads)
+        state_dict[f"blocks.{l}.attn.W_O"] = W_O
+        state_dict[f"blocks.{l}.attn.b_O"] = model.transformer.h[l].attn.c_proj.bias
+
+        state_dict[f"blocks.{l}.ln2.w"] = model.transformer.h[l].ln_2.weight
+        state_dict[f"blocks.{l}.ln2.b"] = torch.zeros_like(
+            model.transformer.h[l].ln_2.weight
+        )
+
+        W_in = model.transformer.h[l].mlp.gate_up_proj.weight
+        state_dict[f"blocks.{l}.mlp.W_in"] = W_in
+        state_dict[f"blocks.{l}.mlp.b_in"] = torch.zeros_like(W_in[:, 0])
+
+        W_out = model.transformer.h[l].mlp.c_proj.weight
+        state_dict[f"blocks.{l}.mlp.W_out"] = W_out
+        state_dict[f"blocks.{l}.mlp.b_out"] = torch.zeros_like(W_out[:, 0])
     state_dict["unembed.W_U"] = model.lm_head.weight.T
 
     state_dict["ln_final.w"] = model.transformer.ln_f.weight

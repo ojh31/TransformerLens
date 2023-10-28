@@ -16,7 +16,15 @@ import torch
 
 from transformer_lens import utils
 
-SUPPORTED_ACTIVATIONS = ["relu", "gelu", "silu", "gelu_new", "solu_ln", "gelu_fast"]
+SUPPORTED_ACTIVATIONS = [
+    "relu",
+    "gelu",
+    "silu",
+    "gelu_new",
+    "solu_ln",
+    "gelu_fast",
+    "half_silu",
+]
 
 
 @dataclass
@@ -39,7 +47,7 @@ class HookedTransformerConfig:
             automatically set from the tokenizer's vocab size.
         act_fn (str, *optional*): The activation function to use. Always
             lowercase. Supports ['relu', 'gelu', 'silu', 'gelu_new', 'solu_ln',
-            'gelu_fast']. Must be set unless using an attn-only model.
+            'gelu_fast', 'half_silu']. Must be set unless using an attn-only model.
         eps (float): The epsilon value to use for layer normalization. Defaults
             to 1e-5
         use_attn_result (bool): whether to explicitly calculate the amount
