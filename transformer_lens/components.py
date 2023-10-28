@@ -849,7 +849,7 @@ def compute_attention_linear_bias(
 
 
 def half_silu(
-    up_proj: Float[torch.Tensor, "hidden_dim + hidden_dim"]
+    up_proj: Float[torch.Tensor, "hidden_dim * 2"]
 ) -> Float[torch.Tensor, "hidden_dim"]:
     """
     Half-SiLU activation function, as defined in
