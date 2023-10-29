@@ -1172,6 +1172,6 @@ def expand_alibi_on_query_dim(x, query_pos):
     )
 
     # Adjust the mask and indices logic to get the desired pattern
-    indices = torch.clamp(key_pos - 1 - row_indices + col_indices, 0, key_pos - 1)
+    indices = torch.clamp(col_indices, 0, key_pos - 1)
     result = x[..., indices]
     return result

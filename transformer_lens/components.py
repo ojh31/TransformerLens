@@ -849,9 +849,7 @@ class Attention(nn.Module):
             )
             slopes = torch.cat([slopes, torch.pow(extra_base, extra_powers)], dim=0)
 
-        arange_tensor = ((attention_mask.cumsum(dim=-1) - 1) * attention_mask)[
-            :, None, :
-        ]
+        arange_tensor = ((attention_mask.cumsum(dim=-1)) * attention_mask)[:, None, :]
         alibi = slopes[..., None] * arange_tensor
         res = alibi.reshape(batch_size, num_heads, 1, max_seq_length).to(dtype)
         # explicitly expand the query dimension and make the bias causal.
