@@ -763,6 +763,7 @@ def convert_hf_model_config(model_name: str, **kwargs):
             "use_local_attn": False,
             "normalization_type": "LN",
             "positional_embedding_type": "alibi",
+            "attention_dir": "bidirectional",
         }
     else:
         raise NotImplementedError(f"{architecture} is not currently supported.")
