@@ -37,7 +37,9 @@ model_names = [
     "microsoft/phi-1_5",
     "microsoft/phi-2",
     "google/gemma-2b",
+    "google/gemma-2b-it",
     "google/gemma-7b",
+    "google/gemma-7b-it",
 ]
 text = "Hello world!"
 """ 
